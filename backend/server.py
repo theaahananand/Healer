@@ -442,13 +442,18 @@ async def register(user_data: UserRegister):
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin):
     """Login user with email and password"""
+    # Validate email format
+    email_valid, email_msg = validate_email(credentials.email)
+    if not email_valid:
+        raise HTTPException(status_code=400, detail=email_msg)
+    
     user = await db.users.find_one({"email": credentials.email})
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="No account found with this email. Please sign up first.")
     
     # Verify password
     if not pwd_context.verify(credentials.password, user['password_hash']):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Incorrect password. Please try again or use 'Forgot Password'.")
     
     # Create JWT token
     token = create_jwt_token(user['id'], user['role'])
