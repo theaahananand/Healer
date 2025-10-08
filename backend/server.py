@@ -566,6 +566,9 @@ async def process_google_session(x_session_id: str = Header(...), response: Resp
             "message": "Google authentication successful"
         }
         
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except Exception as e:
         logging.error(f"Google session error: {str(e)}")
         raise HTTPException(status_code=500, detail="Authentication failed")
