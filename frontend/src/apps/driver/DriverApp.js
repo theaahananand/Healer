@@ -65,6 +65,10 @@ const DriverApp = () => {
     }
   };
 
+  const updateUser = (userData) => {
+    setUser(userData);
+  };
+
   if (loading) {
     return (
       <div className="loading-screen">
