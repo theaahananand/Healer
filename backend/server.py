@@ -552,6 +552,91 @@ async def logout(request: Request, response: Response):
     
     return {"message": "Logout successful"}
 
+@api_router.post("/auth/forgot-password")
+async def forgot_password(email: EmailStr):
+    """Send password reset OTP to email"""
+    user = await db.users.find_one({"email": email})
+    if not user:
+        # Don't reveal if email exists for security
+        return {"message": "If this email exists, a reset link will be sent"}
+    
+    # Generate OTP
+    otp = secrets.randbelow(900000) + 100000  # 6-digit OTP
+    
+    # Store OTP with expiry (10 minutes)
+    await db.password_resets.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "otp": str(otp),
+                "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+        },
+        upsert=True
+    )
+    
+    # In production, send email here
+    # For now, return OTP (remove in production!)
+    logging.info(f"Password reset OTP for {email}: {otp}")
+    
+    return {
+        "message": "Password reset OTP sent to your email",
+        "otp": str(otp)  # Remove this in production!
+    }
+
+@api_router.post("/auth/verify-otp")
+async def verify_otp(email: EmailStr, otp: str):
+    """Verify OTP for password reset"""
+    reset_record = await db.password_resets.find_one({"email": email})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="No reset request found for this email")
+    
+    if datetime.fromisoformat(reset_record['expires_at']) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one")
+    
+    if reset_record['otp'] != otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP. Please try again")
+    
+    # Mark OTP as verified
+    await db.password_resets.update_one(
+        {"email": email},
+        {"$set": {"verified": True}}
+    )
+    
+    return {"message": "OTP verified successfully"}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(email: EmailStr, otp: str, new_password: str):
+    """Reset password after OTP verification"""
+    # Validate new password
+    pwd_valid, pwd_msg = validate_password(new_password)
+    if not pwd_valid:
+        raise HTTPException(status_code=400, detail=pwd_msg)
+    
+    reset_record = await db.password_resets.find_one({"email": email})
+    
+    if not reset_record or not reset_record.get('verified'):
+        raise HTTPException(status_code=400, detail="Please verify OTP first")
+    
+    if reset_record['otp'] != otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    # Hash new password
+    hashed_password = pwd_context.hash(new_password)
+    
+    # Update user password
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"password_hash": hashed_password}}
+    )
+    
+    # Delete reset record
+    await db.password_resets.delete_one({"email": email})
+    
+    return {"message": "Password reset successful. Please login with your new password"}
+
 # ==================== PHARMACY ROUTES ====================
 
 @api_router.post("/pharmacies", response_model=Pharmacy)
