@@ -168,6 +168,8 @@ class OrderCreate(BaseModel):
     items: List[OrderItem]
     delivery_address: Location
     payment_method: str
+    phone: str
+    use_reward_points: bool = False
     notes: Optional[str] = None
 
 class Order(BaseModel):
@@ -177,8 +179,15 @@ class Order(BaseModel):
     pharmacy_id: str
     driver_id: Optional[str] = None
     items: List[OrderItem]
-    total_amount: float
+    item_total: float = 0.0
+    delivery_fee: float = 0.0
+    platform_fee: float = 5.0  # Fixed platform fee
+    discount_amount: float = 0.0
+    points_redeemed: int = 0
+    points_earned: int = 0
+    total_amount: float = 0.0
     delivery_address: Location
+    phone: str
     status: str = OrderStatus.PENDING
     payment_method: str
     payment_status: str = "pending"
