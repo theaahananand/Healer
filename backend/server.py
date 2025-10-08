@@ -1440,11 +1440,12 @@ def generate_verification_code() -> str:
     """Generate 6-digit verification code"""
     return str(secrets.randbelow(900000) + 100000)
 
-def can_resend_code(last_resent_at: Optional[datetime]) -> bool:
+def can_resend_code(last_resent_at: Optional[str]) -> bool:
     """Check if 30 seconds have passed since last code send"""
     if not last_resent_at:
         return True
-    return datetime.now(timezone.utc) > (last_resent_at + timedelta(seconds=30))
+    last_resent_datetime = datetime.fromisoformat(last_resent_at)
+    return datetime.now(timezone.utc) > (last_resent_datetime + timedelta(seconds=30))
 
 @api_router.post("/verification/send-code")
 async def send_verification_code(request: SendVerificationRequest, current_user: Dict = Depends(get_current_user)):
