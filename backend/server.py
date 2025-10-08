@@ -278,6 +278,35 @@ class VerifyPayment(BaseModel):
     razorpay_payment_id: str
     razorpay_signature: str
 
+# Profile Management Models
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+class SendVerificationRequest(BaseModel):
+    type: str  # "email" or "phone"
+    value: str  # new email or phone number
+
+class VerifyCodeRequest(BaseModel):
+    type: str  # "email" or "phone"
+    value: str  # email or phone number
+    code: str
+
+# Verification Storage Model
+class VerificationCode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    type: str  # "email" or "phone"
+    value: str  # email or phone number
+    code: str
+    expires_at: datetime
+    verified: bool = False
+    resend_count: int = 0
+    last_resent_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 # ==================== HELPER FUNCTIONS ====================
 
 def validate_password(password: str) -> tuple[bool, str]:
