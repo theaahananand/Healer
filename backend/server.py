@@ -393,11 +393,25 @@ def calculate_discount_from_points(points_used: int) -> float:
 
 @api_router.post("/auth/register")
 async def register(user_data: UserRegister):
-    """Register a new user"""
+    """Register a new user with validation"""
+    # Validate email
+    email_valid, email_msg = validate_email(user_data.email)
+    if not email_valid:
+        raise HTTPException(status_code=400, detail=email_msg)
+    
+    # Validate password
+    pwd_valid, pwd_msg = validate_password(user_data.password)
+    if not pwd_valid:
+        raise HTTPException(status_code=400, detail=pwd_msg)
+    
     # Check if user already exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Email already registered. Please login instead.")
+    
+    # Validate phone for non-customer roles
+    if user_data.role in ['pharmacy', 'driver'] and not user_data.phone:
+        raise HTTPException(status_code=400, detail=f"Phone number is required for {user_data.role} registration")
     
     # Hash password
     hashed_password = pwd_context.hash(user_data.password)
