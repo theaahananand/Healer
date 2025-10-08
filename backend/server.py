@@ -93,6 +93,9 @@ class User(BaseModel):
     phone: Optional[str] = None
     role: str
     profile_pic: Optional[str] = None
+    reward_points: int = 0
+    is_healer_pro: bool = False
+    healer_pro_expires_at: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Session Models
