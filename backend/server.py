@@ -1334,6 +1334,283 @@ async def get_rewards_summary(current_user: Dict = Depends(get_current_user)):
         "points_value": user.get('reward_points', 0) * 0.25
     }
 
+# ==================== PROFILE MANAGEMENT ROUTES ====================
+
+@api_router.get("/profile")
+async def get_profile(current_user: Dict = Depends(get_current_user)):
+    """Get user profile"""
+    return current_user
+
+@api_router.put("/profile")
+async def update_profile(profile_data: ProfileUpdate, current_user: Dict = Depends(get_current_user)):
+    """Update user profile (requires verification for email/phone changes)"""
+    update_fields = {}
+    
+    # Only update name directly
+    if profile_data.name:
+        update_fields["name"] = profile_data.name
+    
+    # For email and phone, we need verification first
+    if profile_data.email and profile_data.email != current_user.get('email'):
+        # Check if verification exists and is verified
+        verification = await db.verification_codes.find_one({
+            "user_id": current_user['id'],
+            "type": "email",
+            "value": profile_data.email,
+            "verified": True
+        })
+        if not verification:
+            raise HTTPException(status_code=400, detail="Email verification required. Please verify the new email first.")
+        
+        # Check if email is already taken
+        existing_user = await db.users.find_one({"email": profile_data.email})
+        if existing_user and existing_user['id'] != current_user['id']:
+            raise HTTPException(status_code=400, detail="Email already in use")
+            
+        update_fields["email"] = profile_data.email
+        update_fields["email_verified"] = True
+        
+        # Clean up verification record
+        await db.verification_codes.delete_many({
+            "user_id": current_user['id'],
+            "type": "email",
+            "value": profile_data.email
+        })
+    
+    if profile_data.phone and profile_data.phone != current_user.get('phone'):
+        # Check if verification exists and is verified
+        verification = await db.verification_codes.find_one({
+            "user_id": current_user['id'],
+            "type": "phone",
+            "value": profile_data.phone,
+            "verified": True
+        })
+        if not verification:
+            raise HTTPException(status_code=400, detail="Phone verification required. Please verify the new phone number first.")
+            
+        update_fields["phone"] = profile_data.phone
+        update_fields["phone_verified"] = True
+        
+        # Clean up verification record
+        await db.verification_codes.delete_many({
+            "user_id": current_user['id'],
+            "type": "phone",
+            "value": profile_data.phone
+        })
+    
+    if update_fields:
+        await db.users.update_one(
+            {"id": current_user['id']},
+            {"$set": update_fields}
+        )
+    
+    # Return updated user data
+    updated_user = await db.users.find_one({"id": current_user['id']}, {"_id": 0})
+    updated_user.pop('password_hash', None)
+    
+    return {"message": "Profile updated successfully", "user": updated_user}
+
+@api_router.post("/profile/upload-picture")
+async def upload_profile_picture(file: UploadFile = File(...), current_user: Dict = Depends(get_current_user)):
+    """Upload profile picture"""
+    # Validate file type
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+    
+    # Validate file size (5MB max)
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size must be less than 5MB")
+    
+    # Convert to base64 for storage (in production, use cloud storage)
+    base64_image = base64.b64encode(content).decode('utf-8')
+    image_url = f"data:{file.content_type};base64,{base64_image}"
+    
+    # Update user profile
+    await db.users.update_one(
+        {"id": current_user['id']},
+        {"$set": {"profile_pic": image_url}}
+    )
+    
+    return {"message": "Profile picture updated", "profile_pic": image_url}
+
+# ==================== VERIFICATION SYSTEM ROUTES ====================
+
+def generate_verification_code() -> str:
+    """Generate 6-digit verification code"""
+    return str(secrets.randbelow(900000) + 100000)
+
+def can_resend_code(last_resent_at: Optional[datetime]) -> bool:
+    """Check if 30 seconds have passed since last code send"""
+    if not last_resent_at:
+        return True
+    return datetime.now(timezone.utc) > (last_resent_at + timedelta(seconds=30))
+
+@api_router.post("/verification/send-code")
+async def send_verification_code(request: SendVerificationRequest, current_user: Dict = Depends(get_current_user)):
+    """Send verification code for email or phone"""
+    
+    # Validate type
+    if request.type not in ["email", "phone"]:
+        raise HTTPException(status_code=400, detail="Type must be 'email' or 'phone'")
+    
+    # Validate value format
+    if request.type == "email":
+        email_valid, email_msg = validate_email(request.value)
+        if not email_valid:
+            raise HTTPException(status_code=400, detail=email_msg)
+    elif request.type == "phone":
+        if not request.value or len(request.value) < 10:
+            raise HTTPException(status_code=400, detail="Invalid phone number")
+    
+    # Check for existing verification
+    existing = await db.verification_codes.find_one({
+        "user_id": current_user['id'],
+        "type": request.type,
+        "value": request.value
+    })
+    
+    # Check resend limit
+    if existing and existing['resend_count'] >= 5:
+        raise HTTPException(status_code=400, detail="Maximum resend attempts reached. Please try again later.")
+    
+    # Check 30-second cooldown
+    if existing and not can_resend_code(existing.get('last_resent_at')):
+        raise HTTPException(status_code=400, detail="Please wait 30 seconds before requesting another code")
+    
+    # Generate new code
+    code = generate_verification_code()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    
+    if existing:
+        # Update existing record
+        await db.verification_codes.update_one(
+            {"id": existing['id']},
+            {
+                "$set": {
+                    "code": code,
+                    "expires_at": expires_at.isoformat(),
+                    "verified": False,
+                    "last_resent_at": datetime.now(timezone.utc).isoformat()
+                },
+                "$inc": {"resend_count": 1}
+            }
+        )
+    else:
+        # Create new record
+        verification = VerificationCode(
+            user_id=current_user['id'],
+            type=request.type,
+            value=request.value,
+            code=code,
+            expires_at=expires_at,
+            resend_count=1,
+            last_resent_at=datetime.now(timezone.utc)
+        )
+        
+        verification_dict = verification.model_dump()
+        verification_dict['created_at'] = verification_dict['created_at'].isoformat()
+        verification_dict['expires_at'] = verification_dict['expires_at'].isoformat()
+        verification_dict['last_resent_at'] = verification_dict['last_resent_at'].isoformat()
+        
+        await db.verification_codes.insert_one(verification_dict)
+    
+    # In production, send email/SMS here
+    # For now, return code (remove in production!)
+    logging.info(f"Verification code for {request.type} {request.value}: {code}")
+    
+    return {
+        "message": f"Verification code sent to {request.value}",
+        "code": code,  # Remove this in production!
+        "expires_in_minutes": 10
+    }
+
+@api_router.post("/verification/verify-code")
+async def verify_code(request: VerifyCodeRequest, current_user: Dict = Depends(get_current_user)):
+    """Verify code for email or phone"""
+    
+    # Find verification record
+    verification = await db.verification_codes.find_one({
+        "user_id": current_user['id'],
+        "type": request.type,
+        "value": request.value
+    })
+    
+    if not verification:
+        raise HTTPException(status_code=404, detail="No verification request found")
+    
+    # Check if expired
+    if datetime.fromisoformat(verification['expires_at']) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Verification code has expired")
+    
+    # Check code
+    if verification['code'] != request.code:
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+    
+    # Mark as verified
+    await db.verification_codes.update_one(
+        {"id": verification['id']},
+        {"$set": {"verified": True}}
+    )
+    
+    return {"message": "Verification successful"}
+
+@api_router.post("/verification/resend-code")  
+async def resend_verification_code(request: SendVerificationRequest, current_user: Dict = Depends(get_current_user)):
+    """Resend verification code (30-second cooldown)"""
+    # This is the same as send_verification_code but with explicit resend semantics
+    return await send_verification_code(request, current_user)
+
+# Post-signup verification for pharmacy and driver accounts
+@api_router.post("/verification/send-post-signup")
+async def send_post_signup_verification(request: SendVerificationRequest, current_user: Dict = Depends(get_current_user)):
+    """Send post-signup verification for pharmacy and driver accounts"""
+    
+    # Only for pharmacy and driver roles
+    if current_user['role'] not in [UserRole.PHARMACY, UserRole.DRIVER]:
+        raise HTTPException(status_code=403, detail="Post-signup verification only for pharmacy and driver accounts")
+    
+    # Must verify their registered email/phone
+    if request.type == "email" and request.value != current_user.get('email'):
+        raise HTTPException(status_code=400, detail="Must verify your registered email")
+    
+    if request.type == "phone" and request.value != current_user.get('phone'):
+        raise HTTPException(status_code=400, detail="Must verify your registered phone number")
+    
+    return await send_verification_code(request, current_user)
+
+@api_router.post("/verification/complete-post-signup")
+async def complete_post_signup_verification(request: VerifyCodeRequest, current_user: Dict = Depends(get_current_user)):
+    """Complete post-signup verification and update user status"""
+    
+    # Only for pharmacy and driver roles
+    if current_user['role'] not in [UserRole.PHARMACY, UserRole.DRIVER]:
+        raise HTTPException(status_code=403, detail="Post-signup verification only for pharmacy and driver accounts")
+    
+    # Verify the code first
+    await verify_code(request, current_user)
+    
+    # Update user verification status
+    update_fields = {}
+    if request.type == "email":
+        update_fields["email_verified"] = True
+    elif request.type == "phone":
+        update_fields["phone_verified"] = True
+    
+    await db.users.update_one(
+        {"id": current_user['id']},
+        {"$set": update_fields}
+    )
+    
+    # Clean up verification record
+    await db.verification_codes.delete_many({
+        "user_id": current_user['id'],
+        "type": request.type,
+        "value": request.value
+    })
+    
+    return {"message": f"{request.type.title()} verification completed successfully"}
+
 # ==================== DRIVER EARNINGS & REVIEWS ====================
 
 @api_router.get("/drivers/earnings")
