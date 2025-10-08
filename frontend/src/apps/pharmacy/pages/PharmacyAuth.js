@@ -276,6 +276,12 @@ const PharmacyAuth = () => {
         h1 { font-size: 28px; font-weight: 800; color: #1e293b; margin-bottom: 8px; }
         p { color: #64748b; margin-bottom: 24px; }
         .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .btn-google { width: 100%; padding: 14px; border: 2px solid #e5e7eb; border-radius: 12px; background: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; transition: all 0.3s; margin-bottom: 20px; }
+        .btn-google:hover { background: #f9fafb; }
+        .google-icon { width: 20px; height: 20px; }
+        .divider { display: flex; align-items: center; margin: 24px 0; color: #9ca3af; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
+        .divider span { padding: 0 16px; }
         .form-group { margin-bottom: 20px; text-align: left; }
         .form-group label { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 14px; }
         .required { color: #ef4444; }
