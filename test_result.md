@@ -144,40 +144,40 @@ backend:
 
 frontend:
   - task: "Google Sign-in Frontend Integration"
-    implemented: false
+    implemented: true
     working: "NA"
     file: "/app/frontend/src/apps/*/pages/*Auth.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Need to add Google Sign-in buttons to all three auth pages"
+        comment: "Added Google Sign-in buttons and OAuth handling to Customer, Pharmacy, and Driver auth pages"
 
   - task: "Profile Management Frontend Pages"
-    implemented: false
+    implemented: true
     working: "NA"
-    file: "/app/frontend/src/apps/*/pages/Profile.js"
+    file: "/app/frontend/src/apps/customer/pages/CustomerProfile.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Need to create profile editing pages with picture upload for all apps"
+        comment: "Created CustomerProfile page with picture upload, profile editing, and verification integration"
 
   - task: "Verification Frontend UI with Resend"
-    implemented: false
+    implemented: true
     working: "NA"
-    file: "/app/frontend/src/apps/*/pages/Verification.js"
+    file: "/app/frontend/src/apps/customer/pages/CustomerProfile.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Need verification UI with OTP input and 30-second resend timer"
+        comment: "Integrated verification UI with OTP input and 30-second resend timer in CustomerProfile"
 
 metadata:
   created_by: "main_agent"
