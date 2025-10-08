@@ -608,8 +608,12 @@ async def verify_otp(email: EmailStr, otp: str):
     return {"message": "OTP verified successfully"}
 
 @api_router.post("/auth/reset-password")
-async def reset_password(email: EmailStr, otp: str, new_password: str):
+async def reset_password(email: EmailStr, otp: str, new_password: str, confirm_password: str):
     """Reset password after OTP verification"""
+    # Check if passwords match
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    
     # Validate new password
     pwd_valid, pwd_msg = validate_password(new_password)
     if not pwd_valid:
