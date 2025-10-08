@@ -6,6 +6,7 @@ import axios from 'axios';
 import CustomerLanding from './pages/CustomerLanding';
 import CustomerAuth from './pages/CustomerAuth';
 import CustomerDashboard from './pages/CustomerDashboard';
+import CustomerProfile from './pages/CustomerProfile';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
