@@ -195,6 +195,10 @@ class DriverCreate(BaseModel):
     vehicle_type: str
     license_number: str
     vehicle_number: str
+    address: str
+    city: str
+    state: str
+    aadhaar_number: str
 
 class Driver(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -203,9 +207,49 @@ class Driver(BaseModel):
     vehicle_type: str
     license_number: str
     vehicle_number: str
+    address: str
+    city: str
+    state: str
+    aadhaar_number: str
     current_location: Optional[Location] = None
     is_available: bool = True
+    is_verified: bool = False
     rating: float = 0.0
+    total_earnings: float = 0.0
+    total_deliveries: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Delivery Rate by State (INR)
+STATE_DELIVERY_RATES = {
+    "Delhi": {"base": 25, "per_km": 8},
+    "Maharashtra": {"base": 30, "per_km": 10},
+    "Karnataka": {"base": 28, "per_km": 9},
+    "Tamil Nadu": {"base": 25, "per_km": 8},
+    "Uttar Pradesh": {"base": 20, "per_km": 7},
+    "Gujarat": {"base": 25, "per_km": 8},
+    "West Bengal": {"base": 22, "per_km": 7},
+    "Rajasthan": {"base": 23, "per_km": 7},
+    "default": {"base": 25, "per_km": 8}
+}
+
+class DriverEarning(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    driver_id: str
+    order_id: str
+    amount: float
+    distance_km: float
+    state: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class DriverReview(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    order_id: str
+    driver_id: str
+    customer_id: str
+    rating: int  # 1-5
+    comment: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Payment Models
