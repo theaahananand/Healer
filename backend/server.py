@@ -1179,6 +1179,88 @@ async def verify_payment(payment_data: VerifyPayment, current_user: Dict = Depen
         logging.error(f"Payment verification failed: {str(e)}")
         raise HTTPException(status_code=400, detail="Payment verification failed")
 
+# ==================== CUSTOMER PROFILE ROUTES ====================
+
+class SavedAddress(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    label: str  # Home, Work, Other
+    location: Location
+    is_default: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class SavedPaymentMethod(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    type: str  # card, upi
+    label: str
+    last_four: Optional[str] = None  # Last 4 digits of card
+    upi_id: Optional[str] = None
+    is_default: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+@api_router.post("/customer/addresses")
+async def add_address(address: SavedAddress, current_user: Dict = Depends(get_current_user)):
+    """Add delivery address"""
+    if current_user['role'] != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Only customers can add addresses")
+    
+    address.user_id = current_user['id']
+    address_dict = address.model_dump()
+    address_dict['created_at'] = address_dict['created_at'].isoformat()
+    
+    await db.saved_addresses.insert_one(address_dict)
+    return {"message": "Address added", "address": address}
+
+@api_router.get("/customer/addresses")
+async def get_addresses(current_user: Dict = Depends(get_current_user)):
+    """Get all saved addresses"""
+    if current_user['role'] != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Only customers can view addresses")
+    
+    addresses = await db.saved_addresses.find({"user_id": current_user['id']}, {"_id": 0}).to_list(100)
+    return addresses
+
+@api_router.delete("/customer/addresses/{address_id}")
+async def delete_address(address_id: str, current_user: Dict = Depends(get_current_user)):
+    """Delete saved address"""
+    result = await db.saved_addresses.delete_one({"id": address_id, "user_id": current_user['id']})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Address not found")
+    return {"message": "Address deleted"}
+
+@api_router.post("/customer/payment-methods")
+async def add_payment_method(payment: SavedPaymentMethod, current_user: Dict = Depends(get_current_user)):
+    """Add payment method"""
+    if current_user['role'] != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Only customers can add payment methods")
+    
+    payment.user_id = current_user['id']
+    payment_dict = payment.model_dump()
+    payment_dict['created_at'] = payment_dict['created_at'].isoformat()
+    
+    await db.saved_payment_methods.insert_one(payment_dict)
+    return {"message": "Payment method added"}
+
+@api_router.get("/customer/payment-methods")
+async def get_payment_methods(current_user: Dict = Depends(get_current_user)):
+    """Get all saved payment methods"""
+    if current_user['role'] != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Only customers can view payment methods")
+    
+    methods = await db.saved_payment_methods.find({"user_id": current_user['id']}, {"_id": 0}).to_list(100)
+    return methods
+
+@api_router.delete("/customer/payment-methods/{method_id}")
+async def delete_payment_method(method_id: str, current_user: Dict = Depends(get_current_user)):
+    """Delete payment method"""
+    result = await db.saved_payment_methods.delete_one({"id": method_id, "user_id": current_user['id']})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    return {"message": "Payment method deleted"}
+
 # ==================== HEALER PRO ROUTES ====================
 
 @api_router.post("/healer-pro/subscribe")
