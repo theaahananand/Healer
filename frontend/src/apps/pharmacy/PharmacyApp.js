@@ -6,6 +6,7 @@ import axios from 'axios';
 import PharmacyLanding from './pages/PharmacyLanding';
 import PharmacyAuth from './pages/PharmacyAuth';
 import PharmacyDashboard from '../../pages/PharmacyDashboard';
+import PharmacyProfile from './pages/PharmacyProfile';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
