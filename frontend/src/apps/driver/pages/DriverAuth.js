@@ -24,6 +24,49 @@ const DriverAuth = () => {
     phone: ''
   });
 
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes('session_id=')) {
+      const sessionId = hash.split('session_id=')[1].split('&')[0];
+      handleGoogleAuth(sessionId);
+    }
+  }, []);
+
+  const handleGoogleAuth = async (sessionId) => {
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API}/auth/google-session`, {}, {
+        headers: { 'X-Session-ID': sessionId }
+      });
+      // For driver accounts, we need phone number - redirect to complete profile
+      if (response.data.user.role === 'customer') {
+        // Update user role to driver and prompt for phone
+        setError('Please complete your driver registration with required details');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Set form data from Google
+        setFormData(prev => ({
+          ...prev,
+          name: response.data.user.name,
+          email: response.data.user.email
+        }));
+        setIsLogin(false);
+      } else {
+        login(response.data.user, response.data.session_token || 'google-session');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        navigate('/driver/dashboard');
+      }
+    } catch (err) {
+      setError('Google authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    const redirectUrl = `${window.location.origin}/driver/auth`;
+    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
