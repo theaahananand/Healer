@@ -9,13 +9,16 @@ const CustomerAuth = () => {
   const { login, API } = useContext(CustomerContext);
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetStep, setResetStep] = useState('email'); // email, otp, password
+  const [resetStep, setResetStep] = useState('email');
   const [resetEmail, setResetEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   
   const [formData, setFormData] = useState({
     email: '',
@@ -77,25 +80,36 @@ const CustomerAuth = () => {
   const handleForgotPassword = async () => {
     setLoading(true);
     setError('');
+    setSuccess('');
+    
     try {
       if (resetStep === 'email') {
         const response = await axios.post(`${API}/auth/forgot-password`, null, {
           params: { email: resetEmail }
         });
-        alert(`OTP sent to your email. For demo: ${response.data.otp}`);
+        setSuccess(`OTP has been sent to ${resetEmail}. Check your email! (Demo OTP: ${response.data.otp})`);
         setResetStep('otp');
       } else if (resetStep === 'otp') {
         await axios.post(`${API}/auth/verify-otp`, null, {
           params: { email: resetEmail, otp }
         });
+        setSuccess('OTP verified! Now set your new password.');
         setResetStep('password');
       } else if (resetStep === 'password') {
+        if (newPassword !== confirmPassword) {
+          setError('Passwords do not match!');
+          return;
+        }
         await axios.post(`${API}/auth/reset-password`, null, {
-          params: { email: resetEmail, otp, new_password: newPassword }
+          params: { email: resetEmail, otp, new_password: newPassword, confirm_password: confirmPassword }
         });
-        alert('Password reset successful! Please login.');
+        alert('✅ Password reset successful! Please login with your new password.');
         setShowForgotPassword(false);
         setResetStep('email');
+        setResetEmail('');
+        setOtp('');
+        setNewPassword('');
+        setConfirmPassword('');
         setIsLogin(true);
       }
     } catch (err) {
@@ -111,14 +125,16 @@ const CustomerAuth = () => {
         <div className="auth-card">
           <div className="logo"><Pill size={40} /></div>
           <h1>Forgot Password</h1>
-          <p>Reset your password in 3 simple steps</p>
+          <p>Reset your password in 3 steps</p>
 
-          {error && <div className="error" data-testid="error-message"><AlertCircle size={16} />{error}</div>}
+          {error && <div className="error"><AlertCircle size={16} />{error}</div>}
+          {success && <div className="success">✓ {success}</div>}
 
           {resetStep === 'email' && (
             <div>
+              <p className="step-info">Step 1: We'll send a verification code to your email</p>
               <div className="form-group">
-                <label><Mail size={18} /> Email Address</label>
+                <label><Mail size={18} /> Email Address *</label>
                 <input
                   type="email"
                   value={resetEmail}
@@ -127,35 +143,37 @@ const CustomerAuth = () => {
                   required
                 />
               </div>
-              <button onClick={handleForgotPassword} disabled={loading} className="btn-submit">
-                {loading ? 'Sending...' : 'Send OTP'}
+              <button onClick={handleForgotPassword} disabled={loading || !resetEmail} className="btn-submit">
+                {loading ? 'Sending...' : 'Send Verification Code'}
               </button>
             </div>
           )}
 
           {resetStep === 'otp' && (
             <div>
+              <p className="step-info">Step 2: Enter the 6-digit code sent to your email</p>
               <div className="form-group">
-                <label><Lock size={18} /> Enter OTP</label>
+                <label><Lock size={18} /> Verification Code *</label>
                 <input
                   type="text"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  placeholder="Enter 6-digit OTP"
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter 6-digit code"
                   maxLength="6"
                   required
                 />
               </div>
-              <button onClick={handleForgotPassword} disabled={loading} className="btn-submit">
-                {loading ? 'Verifying...' : 'Verify OTP'}
+              <button onClick={handleForgotPassword} disabled={loading || otp.length !== 6} className="btn-submit">
+                {loading ? 'Verifying...' : 'Verify Code'}
               </button>
             </div>
           )}
 
           {resetStep === 'password' && (
             <div>
+              <p className="step-info">Step 3: Create your new password</p>
               <div className="form-group">
-                <label><Lock size={18} /> New Password</label>
+                <label><Lock size={18} /> New Password *</label>
                 <div className="password-input">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -169,33 +187,54 @@ const CustomerAuth = () => {
                   </button>
                 </div>
               </div>
-              <button onClick={handleForgotPassword} disabled={loading} className="btn-submit">
+              <div className="form-group">
+                <label><Lock size={18} /> Confirm Password *</label>
+                <div className="password-input">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter your password"
+                    required
+                  />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="eye-btn">
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <small className="error-text">Passwords do not match</small>
+                )}
+              </div>
+              <button onClick={handleForgotPassword} disabled={loading || !newPassword || !confirmPassword || newPassword !== confirmPassword} className="btn-submit">
                 {loading ? 'Resetting...' : 'Reset Password'}
               </button>
             </div>
           )}
 
           <p className="toggle-text">
-            <button onClick={() => { setShowForgotPassword(false); setError(''); }}>Back to Login</button>
+            <button onClick={() => { setShowForgotPassword(false); setError(''); setSuccess(''); setResetStep('email'); }}>Back to Login</button>
           </p>
         </div>
 
         <style jsx>{`
-          .password-input { position: relative; }
-          .password-input input { width: 100%; padding-right: 45px; }
-          .eye-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #64748b; cursor: pointer; padding: 4px; }
           .auth-page { min-height: 100vh; background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); display: flex; align-items: center; justify-content: center; padding: 24px; }
           .auth-card { background: white; border-radius: 24px; padding: 48px; max-width: 450px; width: 100%; text-align: center; }
           .logo { width: 70px; height: 70px; background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: white; }
           h1 { font-size: 28px; font-weight: 800; color: #1e293b; margin-bottom: 8px; }
           p { color: #64748b; margin-bottom: 24px; }
-          .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+          .step-info { background: #e0f2fe; color: #0369a1; padding: 12px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; }
+          .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; display: flex; align-items: center; gap: 8px; justify-content: center; }
+          .success { background: #d1fae5; color: #065f46; padding: 12px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; }
+          .error-text { color: #ef4444; font-size: 12px; display: block; margin-top: 4px; }
           .form-group { margin-bottom: 20px; text-align: left; }
           .form-group label { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 14px; }
           .form-group input { width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 15px; }
           .form-group input:focus { outline: none; border-color: #0ea5e9; }
-          .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
-          .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
+          .password-input { position: relative; }
+          .password-input input { padding-right: 45px; }
+          .eye-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #64748b; cursor: pointer; padding: 4px; }
+          .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
+          .btn-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
           .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
           .toggle-text { margin-top: 24px; color: #64748b; }
           .toggle-text button { background: none; border: none; color: #0ea5e9; font-weight: 600; cursor: pointer; padding: 0; }
@@ -234,19 +273,19 @@ const CustomerAuth = () => {
           {!isLogin && (
             <div className="form-group">
               <label><User size={18} /> Name</label>
-              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required data-testid="name-input" />
+              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required data-testid="name-input" placeholder="Enter your name" />
             </div>
           )}
 
           <div className="form-group">
             <label><Mail size={18} /> Email</label>
-            <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required data-testid="email-input" />
+            <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required data-testid="email-input" placeholder="your@email.com" />
           </div>
 
           {!isLogin && (
             <div className="form-group">
               <label><Phone size={18} /> Phone (Optional)</label>
-              <input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} data-testid="phone-input" />
+              <input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} data-testid="phone-input" placeholder="+91 98765 43210" />
             </div>
           )}
 
@@ -259,6 +298,7 @@ const CustomerAuth = () => {
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
                 data-testid="password-input"
+                placeholder="Enter password"
               />
               <button type="button" onClick={() => setShowPassword(!showPassword)} className="eye-btn">
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -310,7 +350,7 @@ const CustomerAuth = () => {
         .forgot-link { text-align: right; margin-bottom: 16px; }
         .forgot-link button { background: none; border: none; color: #0ea5e9; font-size: 14px; font-weight: 600; cursor: pointer; }
         .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
-        .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
+        .btn-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
         .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
         .toggle-text { text-align: center; margin-top: 24px; color: #64748b; }
         .toggle-text button { background: none; border: none; color: #0ea5e9; font-weight: 600; cursor: pointer; padding: 0; }
