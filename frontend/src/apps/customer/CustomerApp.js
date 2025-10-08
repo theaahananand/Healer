@@ -79,11 +79,12 @@ const CustomerApp = () => {
   }
 
   return (
-    <CustomerContext.Provider value={{ user, token, login, logout, API }}>
+    <CustomerContext.Provider value={{ user, token, login, logout, updateUser, API }}>
       <Routes>
         <Route path="/" element={user ? <CustomerDashboard /> : <CustomerLanding />} />
         <Route path="/auth" element={user ? <Navigate to="/customer" /> : <CustomerAuth />} />
         <Route path="/dashboard" element={user ? <CustomerDashboard /> : <Navigate to="/customer/auth" />} />
+        <Route path="/profile" element={user ? <CustomerProfile /> : <Navigate to="/customer/auth" />} />
       </Routes>
     </CustomerContext.Provider>
   );
