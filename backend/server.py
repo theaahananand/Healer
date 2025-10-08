@@ -98,6 +98,8 @@ class User(BaseModel):
     reward_points: int = 0
     is_healer_pro: bool = False
     healer_pro_expires_at: Optional[str] = None
+    email_verified: bool = False
+    phone_verified: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Session Models
