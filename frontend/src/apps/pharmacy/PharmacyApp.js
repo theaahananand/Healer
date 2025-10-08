@@ -79,11 +79,12 @@ const PharmacyApp = () => {
   }
 
   return (
-    <PharmacyContext.Provider value={{ user, token, login, logout, API }}>
+    <PharmacyContext.Provider value={{ user, token, login, logout, updateUser, API }}>
       <Routes>
         <Route path="/" element={user ? <Navigate to="/pharmacy/dashboard" /> : <PharmacyLanding />} />
         <Route path="/auth" element={user ? <Navigate to="/pharmacy/dashboard" /> : <PharmacyAuth />} />
         <Route path="/dashboard" element={user ? <PharmacyDashboard /> : <Navigate to="/pharmacy/auth" />} />
+        <Route path="/profile" element={user ? <PharmacyProfile /> : <Navigate to="/pharmacy/auth" />} />
       </Routes>
     </PharmacyContext.Provider>
   );
