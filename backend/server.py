@@ -17,6 +17,8 @@ import razorpay
 import json
 import re
 import secrets
+from fastapi import File, UploadFile
+import base64
 
 
 ROOT_DIR = Path(__file__).parent
