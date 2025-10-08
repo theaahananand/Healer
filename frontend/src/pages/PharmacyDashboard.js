@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { AuthContext } from '../App';
+import { PharmacyContext } from '../apps/pharmacy/PharmacyApp';
 import { Store, Package, ShoppingBag, Settings, LogOut, Plus, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 
 const PharmacyDashboard = () => {
