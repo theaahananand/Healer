@@ -79,11 +79,12 @@ const DriverApp = () => {
   }
 
   return (
-    <DriverContext.Provider value={{ user, token, login, logout, API }}>
+    <DriverContext.Provider value={{ user, token, login, logout, updateUser, API }}>
       <Routes>
         <Route path="/" element={user ? <Navigate to="/driver/dashboard" /> : <DriverLanding />} />
         <Route path="/auth" element={user ? <Navigate to="/driver/dashboard" /> : <DriverAuth />} />
         <Route path="/dashboard" element={user ? <DriverDashboard /> : <Navigate to="/driver/auth" />} />
+        <Route path="/profile" element={user ? <DriverProfile /> : <Navigate to="/driver/auth" />} />
       </Routes>
     </DriverContext.Provider>
   );
