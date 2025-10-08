@@ -65,6 +65,10 @@ const PharmacyApp = () => {
     }
   };
 
+  const updateUser = (userData) => {
+    setUser(userData);
+  };
+
   if (loading) {
     return (
       <div className="loading-screen">
