@@ -1056,6 +1056,177 @@ async def verify_payment(payment_data: VerifyPayment, current_user: Dict = Depen
         logging.error(f"Payment verification failed: {str(e)}")
         raise HTTPException(status_code=400, detail="Payment verification failed")
 
+# ==================== HEALER PRO ROUTES ====================
+
+@api_router.post("/healer-pro/subscribe")
+async def subscribe_healer_pro(current_user: Dict = Depends(get_current_user)):
+    """Subscribe to Healer Pro membership"""
+    if current_user['role'] != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Only customers can subscribe")
+    
+    # Set expiry to 1 month from now
+    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+    
+    await db.users.update_one(
+        {"id": current_user['id']},
+        {"$set": {
+            "is_healer_pro": True,
+            "healer_pro_expires_at": expires_at.isoformat()
+        }}
+    )
+    
+    return {"message": "Healer Pro activated", "expires_at": expires_at.isoformat()}
+
+@api_router.get("/rewards/summary")
+async def get_rewards_summary(current_user: Dict = Depends(get_current_user)):
+    """Get user rewards summary"""
+    if current_user['role'] != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Only customers can view rewards")
+    
+    user = await db.users.find_one({"id": current_user['id']}, {"_id": 0})
+    
+    return {
+        "reward_points": user.get('reward_points', 0),
+        "is_healer_pro": user.get('is_healer_pro', False),
+        "healer_pro_expires_at": user.get('healer_pro_expires_at'),
+        "points_value": user.get('reward_points', 0) * 0.25
+    }
+
+# ==================== DRIVER EARNINGS & REVIEWS ====================
+
+@api_router.get("/drivers/earnings")
+async def get_driver_earnings(current_user: Dict = Depends(get_current_user)):
+    \"\"\"Get driver earnings summary and history\"\"\"
+    if current_user['role'] != UserRole.DRIVER:
+        raise HTTPException(status_code=403, detail=\"Only drivers can view earnings\")
+    
+    driver = await db.drivers.find_one({\"user_id\": current_user['id']}, {\"_id\": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail=\"Driver profile not found\")
+    
+    # Get earnings history
+    earnings = await db.driver_earnings.find({\"driver_id\": driver['id']}, {\"_id\": 0}).to_list(1000)
+    
+    return {
+        \"total_earnings\": driver.get('total_earnings', 0.0),
+        \"total_deliveries\": driver.get('total_deliveries', 0),
+        \"rating\": driver.get('rating', 0.0),
+        \"state\": driver.get('state'),
+        \"earnings_history\": earnings
+    }
+
+@api_router.get(\"/drivers/reviews\")
+async def get_driver_reviews(current_user: Dict = Depends(get_current_user)):
+    \"\"\"Get driver reviews\"\"\"
+    if current_user['role'] != UserRole.DRIVER:
+        raise HTTPException(status_code=403, detail=\"Only drivers can view reviews\")
+    
+    driver = await db.drivers.find_one({\"user_id\": current_user['id']})
+    if not driver:
+        raise HTTPException(status_code=404, detail=\"Driver profile not found\")
+    
+    reviews = await db.driver_reviews.find({\"driver_id\": driver['id']}, {\"_id\": 0}).to_list(1000)
+    
+    return reviews
+
+@api_router.post(\"/orders/{order_id}/review-driver\")
+async def review_driver(order_id: str, rating: int, comment: Optional[str] = None, current_user: Dict = Depends(get_current_user)):
+    \"\"\"Customer reviews driver after delivery\"\"\"
+    if current_user['role'] != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail=\"Only customers can review drivers\")
+    
+    if rating < 1 or rating > 5:
+        raise HTTPException(status_code=400, detail=\"Rating must be between 1 and 5\")
+    
+    order = await db.orders.find_one({\"id\": order_id})
+    if not order or order['customer_id'] != current_user['id']:
+        raise HTTPException(status_code=404, detail=\"Order not found\")
+    
+    if order['status'] != OrderStatus.DELIVERED:
+        raise HTTPException(status_code=400, detail=\"Can only review after delivery\")
+    
+    if not order.get('driver_id'):
+        raise HTTPException(status_code=400, detail=\"No driver assigned\")
+    
+    # Create review
+    review = DriverReview(
+        order_id=order_id,
+        driver_id=order['driver_id'],
+        customer_id=current_user['id'],
+        rating=rating,
+        comment=comment
+    )
+    
+    review_dict = review.model_dump()
+    review_dict['created_at'] = review_dict['created_at'].isoformat()
+    
+    await db.driver_reviews.insert_one(review_dict)
+    
+    # Update driver rating
+    all_reviews = await db.driver_reviews.find({\"driver_id\": order['driver_id']}).to_list(1000)
+    avg_rating = sum(r['rating'] for r in all_reviews) / len(all_reviews)
+    
+    await db.drivers.update_one(
+        {\"id\": order['driver_id']},
+        {\"$set\": {\"rating\": round(avg_rating, 2)}}
+    )
+    
+    return {\"message\": \"Review submitted\", \"rating\": rating}
+
+@api_router.put(\"/orders/{order_id}/complete-delivery\")
+async def complete_delivery(order_id: str, current_user: Dict = Depends(get_current_user)):
+    \"\"\"Mark delivery as complete and record driver earnings\"\"\"
+    if current_user['role'] != UserRole.DRIVER:
+        raise HTTPException(status_code=403, detail=\"Only drivers can complete deliveries\")
+    
+    order = await db.orders.find_one({\"id\": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail=\"Order not found\")
+    
+    driver = await db.drivers.find_one({\"user_id\": current_user['id']})
+    if not driver or order.get('driver_id') != driver['id']:
+        raise HTTPException(status_code=403, detail=\"Not authorized\")
+    
+    # Calculate driver earning
+    earning_amount = calculate_driver_earning(order['distance_km'], driver['state'])
+    
+    # Record earning
+    earning = DriverEarning(
+        driver_id=driver['id'],
+        order_id=order_id,
+        amount=earning_amount,
+        distance_km=order['distance_km'],
+        state=driver['state']
+    )
+    
+    earning_dict = earning.model_dump()
+    earning_dict['created_at'] = earning_dict['created_at'].isoformat()
+    
+    await db.driver_earnings.insert_one(earning_dict)
+    
+    # Update driver totals
+    await db.drivers.update_one(
+        {\"id\": driver['id']},
+        {
+            \"$inc\": {
+                \"total_earnings\": earning_amount,
+                \"total_deliveries\": 1
+            }
+        }
+    )
+    
+    # Update order status
+    await db.orders.update_one(
+        {\"id\": order_id},
+        {\"$set\": {\"status\": OrderStatus.DELIVERED, \"updated_at\": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {
+        \"message\": \"Delivery completed\",
+        \"earning\": earning_amount,
+        \"status\": OrderStatus.DELIVERED
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
