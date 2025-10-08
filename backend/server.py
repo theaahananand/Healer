@@ -685,12 +685,17 @@ async def delete_medicine(medicine_id: str, current_user: Dict = Depends(get_cur
 
 @api_router.post("/orders", response_model=Order)
 async def create_order(order_data: OrderCreate, current_user: Dict = Depends(get_current_user)):
-    """Create a new order"""
+    """Create a new order with full pricing calculation"""
     if current_user['role'] != UserRole.CUSTOMER:
         raise HTTPException(status_code=403, detail="Only customers can create orders")
     
-    # Calculate total amount
-    total_amount = sum(item.price * item.quantity for item in order_data.items)
+    # Get user data
+    user = await db.users.find_one({"id": current_user['id']})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Calculate item total
+    item_total = sum(item.price * item.quantity for item in order_data.items)
     
     # Get pharmacy location to calculate distance
     pharmacy = await db.pharmacies.find_one({"id": order_data.pharmacy_id})
@@ -708,14 +713,44 @@ async def create_order(order_data: OrderCreate, current_user: Dict = Depends(get
     if order_data.payment_method == PaymentMethod.CASH_ON_DELIVERY and distance >= 10:
         raise HTTPException(status_code=400, detail="Cash on Delivery not available for orders beyond 10km")
     
+    # Calculate fees
+    is_healer_pro = user.get('is_healer_pro', False)
+    delivery_fee = calculate_delivery_fee(distance, is_healer_pro)
+    platform_fee = 5.0
+    
+    # Handle reward points
+    discount_amount = 0.0
+    points_redeemed = 0
+    if order_data.use_reward_points:
+        available_points = user.get('reward_points', 0)
+        # Can use up to 50% of item total
+        max_discount = item_total * 0.5
+        max_points = int(max_discount / 0.25)
+        points_to_use = min(available_points, max_points)
+        discount_amount = calculate_discount_from_points(points_to_use)
+        points_redeemed = points_to_use
+    
+    # Calculate total
+    total_amount = item_total + delivery_fee + platform_fee - discount_amount
+    
+    # Calculate points earned (1 point per ₹20)
+    points_earned = calculate_reward_points(total_amount)
+    
     estimated_time = estimate_delivery_time(distance)
     
     order = Order(
         customer_id=current_user['id'],
         pharmacy_id=order_data.pharmacy_id,
         items=order_data.items,
+        item_total=item_total,
+        delivery_fee=delivery_fee,
+        platform_fee=platform_fee,
+        discount_amount=discount_amount,
+        points_redeemed=points_redeemed,
+        points_earned=points_earned,
         total_amount=total_amount,
         delivery_address=order_data.delivery_address,
+        phone=order_data.phone,
         payment_method=order_data.payment_method,
         distance_km=distance,
         estimated_time=estimated_time,
@@ -727,6 +762,13 @@ async def create_order(order_data: OrderCreate, current_user: Dict = Depends(get
     order_dict['updated_at'] = order_dict['updated_at'].isoformat()
     
     await db.orders.insert_one(order_dict)
+    
+    # Update user reward points
+    new_points = user.get('reward_points', 0) - points_redeemed + points_earned
+    await db.users.update_one(
+        {"id": current_user['id']},
+        {"$set": {"reward_points": new_points}}
+    )
     
     return order
 
