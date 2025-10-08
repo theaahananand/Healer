@@ -4,6 +4,9 @@ import axios from 'axios';
 import { PharmacyContext } from '../apps/pharmacy/PharmacyApp';
 import { Store, Package, ShoppingBag, Settings, LogOut, Plus, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 
+// Fix: Export PharmacyContext from the PharmacyApp file
+export { PharmacyContext } from '../apps/pharmacy/PharmacyApp';
+
 const PharmacyDashboard = () => {
   const navigate = useNavigate();
   const { user, logout, API, token } = useContext(AuthContext);
