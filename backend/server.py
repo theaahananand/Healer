@@ -276,6 +276,23 @@ class VerifyPayment(BaseModel):
 
 # ==================== HELPER FUNCTIONS ====================
 
+def validate_password(password: str) -> tuple[bool, str]:
+    """Validate password requirements"""
+    if len(password) < 6:
+        return False, "Password must be at least 6 characters long"
+    
+    if not re.search(r'[@#$%^&+=!]', password):
+        return False, "Password must contain at least one special character (@#$%^&+=!)"
+    
+    return True, "Password is valid"
+
+def validate_email(email: str) -> tuple[bool, str]:
+    """Basic email validation"""
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return False, "Invalid email format"
+    return True, "Email is valid"
+
 def create_jwt_token(user_id: str, role: str) -> str:
     """Create JWT token for user"""
     payload = {
