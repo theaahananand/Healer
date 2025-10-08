@@ -108,39 +108,48 @@ user_problem_statement: |
 backend:
   - task: "Google OAuth Backend Integration"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Google OAuth integration was already implemented using Emergent Auth system"
+      - working: true
+        agent: "testing"
+        comment: "✅ Google OAuth endpoint working correctly. Properly validates X-Session-ID header and rejects invalid sessions with 401. Fixed exception handling to preserve HTTP status codes."
 
   - task: "Profile Management Backend APIs"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Added profile update, picture upload, verification endpoints with proper validation"
+      - working: true
+        agent: "testing"
+        comment: "✅ All profile management APIs working correctly. GET /api/profile retrieves user data, PUT /api/profile updates name directly and requires verification for email/phone changes, POST /api/profile/upload-picture handles file uploads with proper validation (5MB limit, image types only)."
 
   - task: "Email/Phone Verification with OTP"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Added comprehensive OTP system with 30-second resend, verification tracking, and post-signup verification"
+      - working: true
+        agent: "testing"
+        comment: "✅ Complete verification system working perfectly. All endpoints functional: send-code, verify-code, resend-code with 30-second cooldown, send-post-signup, and complete-post-signup. Fixed datetime handling bug in resend cooldown function. OTP generation, validation, and expiry (10 minutes) all working correctly."
 
 frontend:
   - task: "Google Sign-in Frontend Integration"
