@@ -342,6 +342,34 @@ def estimate_delivery_time(distance_km: float) -> int:
     # Simple estimation: 5 min base + 2 min per km
     return int(5 + (distance_km * 2))
 
+def calculate_delivery_fee(distance_km: float, is_healer_pro: bool) -> float:
+    """Calculate delivery fee based on distance and membership"""
+    if is_healer_pro:
+        return 0.0
+    
+    # Delivery fee calculation like Swiggy/Zomato
+    if distance_km <= 2:
+        return 20.0
+    elif distance_km <= 5:
+        return 30.0
+    elif distance_km <= 10:
+        return 50.0
+    else:
+        return 70.0
+
+def calculate_driver_earning(distance_km: float, state: str) -> float:
+    """Calculate driver earnings based on distance and state"""
+    rates = STATE_DELIVERY_RATES.get(state, STATE_DELIVERY_RATES["default"])
+    return rates["base"] + (distance_km * rates["per_km"])
+
+def calculate_reward_points(order_amount: float) -> int:
+    """Calculate reward points: 1 point per ₹20 spent"""
+    return int(order_amount / 20)
+
+def calculate_discount_from_points(points_used: int) -> float:
+    """Convert points to discount: 1 point = ₹0.25"""
+    return points_used * 0.25
+
 # ==================== AUTH ROUTES ====================
 
 @api_router.post("/auth/register")
